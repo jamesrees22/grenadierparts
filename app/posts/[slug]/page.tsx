@@ -11,11 +11,11 @@ export default async function PostPage({ params }: { params: { slug: string } })
   }
 
   return (
-    <article>
+    <article style={{ maxWidth: 820 }}>
       <h1>{post.title}</h1>
       <p style={{ opacity: 0.75, marginTop: -8 }}>{post.date}</p>
 
-      {/* Top ad (replace data-ad-slot with your real slot ID after AdSense approval) */}
+      {/* Top ad (replace slot ID after AdSense approval) */}
       <AdSenseBlock
         data-ad-slot="1234567890"
         data-ad-format="auto"
@@ -24,7 +24,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
       <div dangerouslySetInnerHTML={{ __html: post.html }} />
 
-      {/* Bottom ad (replace data-ad-slot with your real slot ID after AdSense approval) */}
+      {/* Bottom ad */}
       <div style={{ marginTop: 24 }}>
         <AdSenseBlock
           data-ad-slot="9876543210"
@@ -34,8 +34,13 @@ export default async function PostPage({ params }: { params: { slug: string } })
       </div>
 
       <hr style={{ margin: "32px 0" }} />
+
+      {/* Disclaimer */}
       <p style={{ fontSize: 14, opacity: 0.8 }}>
-        This post may contain affiliate links that help support the site at no extra cost to you.
+        This post may contain affiliate links that help support the site at no extra cost to you.  
+        Please read our{" "}
+        <a href="/disclosure" style={{ textDecoration: "underline" }}>Affiliate Disclosure</a> and{" "}
+        <a href="/privacy" style={{ textDecoration: "underline" }}>Privacy Policy</a>.
       </p>
     </article>
   );
