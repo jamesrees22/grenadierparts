@@ -5,6 +5,14 @@ import crypto from "node:crypto";
 import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 
+// ---------- Types ----------
+type FeedItem = { title: string; link: string; pubDate?: string };
+type PickedItem = { title: string; link: string; date: string };
+type SeenRecord = Record<string, PickedItem>;
+type OpenAIChatResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
 // ---------- Config ----------
 const KEYWORDS = [
   "ineos grenadier",
@@ -15,7 +23,7 @@ const KEYWORDS = [
   "4x4",
   "off-road",
   "overland",
-  "overlanding"
+  "overlanding",
 ];
 
 const POSTS_DIR = path.join(process.cwd(), "content", "posts");
@@ -55,7 +63,7 @@ async function get(url: string) {
 async function fetchFeed(url: string) {
   const text = await get(url);
   const $ = cheerio.load(text, { xmlMode: text.trim().startsWith("<?xml") });
-  const items: { title: string; link: string; pubDate?: string }[] = [];
+  const items: FeedItem[] = [];
 
   // RSS
   $("item").each((_, el) => {
@@ -84,7 +92,7 @@ async function fetchFeed(url: string) {
 
 function keywordMatch(s: string) {
   const lo = s.toLowerCase();
-  return KEYWORDS.some(k => lo.includes(k));
+  return KEYWORDS.some((k) => lo.includes(k));
 }
 
 async function fetchArticleSummary(url: string, title: string) {
@@ -108,20 +116,22 @@ async function fetchArticleSummary(url: string, title: string) {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${OPENAI_API_KEY}`
+          authorization: `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.3
-        })
+          temperature: 0.3,
+        }),
       });
       if (r.ok) {
-        const j = await r.json();
+        const j = (await r.json()) as OpenAIChatResponse; // <-- typed
         const content = j.choices?.[0]?.message?.content?.trim();
         if (content) summary = content;
       }
-    } catch {}
+    } catch {
+      // keep heuristic summary
+    }
   }
 
   return summary;
@@ -144,9 +154,9 @@ async function main() {
   ensureDir(POSTS_DIR);
 
   const feeds: string[] = loadJSON(FEEDS_FILE, []);
-  const seen: Record<string, { title: string; link: string; date: string }> = loadJSON(SEEN_FILE, {});
+  const seen: SeenRecord = loadJSON(SEEN_FILE, {});
 
-  let candidates: { title: string; link: string; pubDate?: string }[] = [];
+  let candidates: FeedItem[] = [];
   for (const f of feeds) {
     try {
       const items = await fetchFeed(f);
@@ -157,7 +167,7 @@ async function main() {
   }
 
   // Filter for Grenadier/4x4 relevance and dedupe by link hash
-  const picked: { title: string; link: string; date: string }[] = [];
+  const picked: PickedItem[] = [];
   for (const it of candidates) {
     const t = it.title || "";
     if (!keywordMatch(t)) continue;
@@ -178,7 +188,7 @@ async function main() {
   }
 
   // Summarise each item
-  const summaries: { title: string; link: string; date: string; summary: string }[] = [];
+  const summaries: Array<PickedItem & { summary: string }> = [];
   for (const p of picked) {
     const s = await fetchArticleSummary(p.link, p.title);
     summaries.push({ ...p, summary: s });
@@ -224,7 +234,7 @@ ${body}
   console.log(`Created ${path.relative(process.cwd(), outFile)}`);
 }
 
-main().catch(e => {
+main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
