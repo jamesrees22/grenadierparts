@@ -1,10 +1,13 @@
 ---
 title: "Best Overlanding & Camping Setup for the Ineos Grenadier (2025)"
 date: "2025-09-01"
-excerpt: "Transform your Ineos Grenadier into the ultimate overlanding rig. Here’s the gear you need for camping, cooking, and exploring off the beaten track in 2025."
+excerpt: "Transform your Ineos Grenadier..."
 image: "/grenadier.jpg"
 image_credit: "Image © James Rees or licensed stock"
+tags: [overlanding, accessories]
+category: accessories
 ---
+
 
 The Ineos Grenadier is already a go-anywhere 4x4. But with the right gear, it can also become a comfortable rolling campsite — perfect for extended trips, wild camping, or cross-continental expeditions.  
 

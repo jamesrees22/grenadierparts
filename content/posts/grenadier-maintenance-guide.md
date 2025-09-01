@@ -1,10 +1,13 @@
 ---
 title: "Ineos Grenadier Maintenance & Service Guide (2025)"
 date: "2025-09-01"
-excerpt: "Keep your Ineos Grenadier running strong. Here’s a complete 2025 guide to maintenance intervals, servicing costs, and DIY checks every owner should know."
+excerpt: "Keep your Ineos Grenadier running strong..."
 image: "/grenadier.jpg"
 image_credit: "Image © James Rees or licensed stock"
+tags: [maintenance, service]
+category: maintenance
 ---
+
 
 The Ineos Grenadier is engineered to be a tough, reliable workhorse. But like any serious 4x4, regular maintenance is the key to keeping it performing at its best — whether you’re tackling trails, towing heavy loads, or just using it as a daily driver.  
 

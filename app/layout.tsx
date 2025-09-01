@@ -1,72 +1,39 @@
 import "./globals.css";
-import { Inter } from "next/font/google";
+import type { Metadata } from "next";
+import React from "react";
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata = {
+export const metadata: Metadata = {
   title: "GrenadierParts.com",
-  description: "Accessories, parts & resources for the Ineos Grenadier.",
-  icons: { icon: "/favicon.ico" }
+  description: "Guides, gear & parts for the Ineos Grenadier",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-
   return (
-    <html lang="en" className={inter.className}>
+    <html lang="en">
       <body>
-        <header className="site-header">
+        <header style={{ padding: "20px 0" }}>
           <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <a href="/" className="brand" aria-label="GrenadierParts.com Home">
-              <h1 className="brand-title" style={{ margin: 0 }}>GrenadierParts.com</h1>
+            <a href="/" style={{ fontSize: 28, fontWeight: 800, color: "var(--brand)" }}>
+              GrenadierParts.com
             </a>
-            <nav style={{ display: "flex", gap: 16 }}>
-              <a href="/">Home</a>
-              <a href="/posts/accessories">Accessories</a>
-              <a href="/posts/maintenance">Maintenance</a>
-              <a href="/posts/news">News</a>
-              <a href="/disclosure">Disclosure</a>
+            <nav style={{ display: "flex", gap: 18 }}>
+              <a href="/" className="link">Home</a>
+              <a href="/category/accessories" className="link">Accessories</a>
+              <a href="/category/maintenance" className="link">Maintenance</a>
+              <a href="/news" className="link">News</a>
+              <a href="/disclosure" className="link">Disclosure</a>
             </nav>
           </div>
         </header>
 
-        <main className="container">
-          {children}
-        </main>
+        <main className="container" style={{ paddingBottom: 40 }}>{children}</main>
 
-        <footer className="site-footer">
-          <div className="container">
-            <p>
-              © {new Date().getFullYear()} GrenadierParts.com •{" "}
-              <a href="/disclosure">Disclosure</a> •{" "}
-              <a href="/privacy">Privacy</a>
-            </p>
-          </div>
+        <footer className="container" style={{ padding: "24px 0", opacity: 0.9 }}>
+          <small>
+            © {new Date().getFullYear()} GrenadierParts.com •{" "}
+            <a href="/disclosure">Disclosure</a> • <a href="/privacy">Privacy</a>
+          </small>
         </footer>
-
-        {/* GA4 */}
-        {GA_ID && (
-          <>
-            <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}></script>
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-                  window.dataLayer = window.dataLayer || [];
-                  function gtag(){dataLayer.push(arguments);}
-                  gtag('js', new Date());
-                  gtag('config', '${GA_ID}');
-                `
-              }}
-            />
-          </>
-        )}
-
-        {/* Google AdSense (global) */}
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8299388815722920"
-          crossOrigin="anonymous"
-        />
       </body>
     </html>
   );

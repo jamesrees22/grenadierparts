@@ -1,10 +1,13 @@
 ---
 title: "Top 10 Accessories for the Ineos Grenadier in 2025"
 date: "2025-09-01"
-excerpt: "Looking to upgrade your Ineos Grenadier? Here are the top 10 accessories every Grenadier owner should consider in 2025 — from roof racks to recovery gear."
+excerpt: "Looking to upgrade your Ineos Grenadier? ..."
 image: "/grenadier.jpg"
 image_credit: "Image © James Rees or licensed stock"
+tags: [accessories, guide]
+category: accessories
 ---
+
 
 The Ineos Grenadier is built tough out of the box, but like any serious off-roader or overlander, the right accessories can take it from capable to unstoppable. Whether you’re prepping for weekend trails, long expeditions, or just daily practicality, these 10 upgrades will make your Grenadier more versatile, comfortable, and adventure-ready.
 

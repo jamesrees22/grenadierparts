@@ -9,7 +9,7 @@ export default async function HomePage() {
 
   return (
     <section>
-      {/* HERO */}
+      {/* HERO (uses <img> so it doesn't crop) */}
       <section
         aria-label="Ineos Grenadier hero"
         style={{
@@ -17,17 +17,19 @@ export default async function HomePage() {
           borderRadius: 12,
           overflow: "hidden",
           border: "1px solid var(--border)",
+          background: "var(--panel)",
         }}
       >
-        <div
+        <img
+          src="/grenadier.jpg"
+          alt="Ineos Grenadier on a mountain trail"
           style={{
             width: "100%",
-            minHeight: 280,
-            maxHeight: 460,
-            backgroundImage: "url(/grenadier.jpg)",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
+            height: "auto",
+            display: "block",
+            lineHeight: 0,
           }}
+          loading="eager"
         />
         <div style={{ padding: 16 }}>
           <h2 style={{ margin: 0 }}>Guides, gear & parts for the Ineos Grenadier</h2>
