@@ -111,7 +111,11 @@ async function fetchArticleSummary(url: string, title: string) {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
   if (OPENAI_API_KEY && summary !== "Summary not available.") {
     try {
-      const prompt = `Summarise the following article in 2–3 sentences focusing on Ineos Grenadier/4x4 relevance. Keep it neutral and factual.\n\nTitle: ${title}\n\nText:\n${summary}`;
+      const prompt =
+        `Summarise in 2 concise sentences, neutral and factual, focused on Ineos Grenadier / 4x4 relevance only. ` +
+        `Avoid speculation or marketing language. Do not invent details.\n\n` +
+        `Title: ${title}\n\nText:\n${summary}`;
+
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -121,11 +125,11 @@ async function fetchArticleSummary(url: string, title: string) {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.3,
+          temperature: 0.2,
         }),
       });
       if (r.ok) {
-        const j = (await r.json()) as OpenAIChatResponse; // <-- typed
+        const j = (await r.json()) as OpenAIChatResponse; // typed response
         const content = j.choices?.[0]?.message?.content?.trim();
         if (content) summary = content;
       }
@@ -216,6 +220,9 @@ date: "${today}"
 excerpt: "Latest headlines and community updates about the Ineos Grenadier — ${label}."
 image: "/grenadier.jpg"
 image_credit: "Image © James Rees or licensed stock"
+tags:
+  - news
+category: news
 ---
 
 Welcome to the ${label} Grenadier News Roundup. Here are the key headlines and updates from around the web.
