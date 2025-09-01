@@ -9,174 +9,133 @@ import * as cheerio from "cheerio";
 type FeedItem = { title: string; link: string; pubDate?: string };
 type PickedItem = { title: string; link: string; date: string };
 type SeenRecord = Record<string, PickedItem>;
-type OpenAIChatResponse = {
-  choices?: Array<{ message?: { content?: string } }>;
-};
+type OpenAIChatResponse = { choices?: Array<{ message?: { content?: string } }> };
 
 // ---------- Config ----------
 const KEYWORDS = [
-  "ineos grenadier",
-  "grenadier",
-  "quartermaster",
-  "fieldmaster",
-  "trailmaster",
-  "4x4",
-  "off-road",
-  "overland",
-  "overlanding",
+  "ineos grenadier", "grenadier", "quartermaster", "fieldmaster",
+  "trailmaster", "4x4", "off-road", "overland", "overlanding",
 ];
 
-const MAX_PER_RUN = 10; // hard cap of new items processed per run
-const SUMMARY_DELAY_MS = 400; // courtesy delay between summaries
+const MAX_PER_RUN = 10;
+const SUMMARY_DELAY_MS = 400;
 
 const POSTS_DIR = path.join(process.cwd(), "content", "posts");
 const DATA_DIR = path.join(process.cwd(), "data");
 const FEEDS_FILE = path.join(DATA_DIR, "feeds.json");
-const SEEN_FILE = path.join(DATA_DIR, "seen.json"); // store hashes/urls we already used
+const SEEN_FILE = path.join(DATA_DIR, "seen.json");
 
 // ---------- Helpers ----------
 function monthLabel(d = new Date()) {
-  const fmt = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
-  return fmt.format(d); // e.g., "September 2025"
+  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(d);
 }
-
-function ymd(d = new Date()) {
-  return d.toISOString().slice(0, 10);
-}
-
+function ymd(d = new Date()) { return d.toISOString().slice(0, 10); }
 function slugify(s: string) {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "")
-    .slice(0, 90);
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "").slice(0, 90);
 }
-
-function hash(input: string) {
-  return crypto.createHash("sha1").update(input).digest("hex");
-}
-
+function hash(input: string) { return crypto.createHash("sha1").update(input).digest("hex"); }
 function canonical(url: string) {
-  try {
-    const u = new URL(url);
-    u.hash = "";
-    return u.toString();
-  } catch {
-    return url;
-  }
+  try { const u = new URL(url); u.hash = ""; return u.toString(); } catch { return url; }
 }
-
 async function get(url: string) {
-  // Fetch with timeout + UA
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-
+  const controller = new AbortController(); const t = setTimeout(() => controller.abort(), 15_000);
   const init: RequestInit = {
     headers: { "user-agent": "grenadierparts.com news-bot (+https://grenadierparts.com)" },
     signal: controller.signal,
   };
-
   try {
     const res = await fetch(url, init);
     if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
     return await res.text();
-  } finally {
-    clearTimeout(timeout);
-  }
+  } finally { clearTimeout(t); }
 }
 
-// extremely tolerant RSS/Atom fetcher (falls back to og tags from HTML if needed)
+// OG image extractor (absolute URL)
+function extractOgImage($: cheerio.CheerioAPI, base: string): string | null {
+  const raw =
+    $("meta[property='og:image']").attr("content") ||
+    $("meta[name='twitter:image']").attr("content") ||
+    $("meta[name='twitter:image:src']").attr("content") ||
+    null;
+
+  if (!raw) return null;
+  try {
+    // resolve relative to the page URL
+    const abs = new URL(raw, base).toString();
+    // rudimentary guard against tiny tracking pixels
+    if (abs.endsWith(".gif")) return null;
+    return abs;
+  } catch { return null; }
+}
+
+// Tolerant feed fetcher
 async function fetchFeed(url: string) {
   const text = await get(url);
-  // Heuristic: XML mode if starts with XML prolog or <rss / <feed
   const looksXml = /^\s*<\?xml|^\s*<(rss|feed)\b/i.test(text);
   const $ = cheerio.load(text, { xmlMode: looksXml });
 
   const items: FeedItem[] = [];
-  let rssCount = 0;
-  let atomCount = 0;
+  let rssCount = 0, atomCount = 0;
 
-  // RSS
   $("item").each((_, el) => {
     const title = $(el).find("title").first().text().trim();
     let link = $(el).find("link").first().text().trim();
-    // Some feeds nest <link> as child text; if empty, try guid[isPermaLink=true]
     if (!link) {
       const guid = $(el).find("guid[ispermalink='true'], guid[isPermaLink='true']").first().text().trim();
       if (guid) link = guid;
     }
     const pubDate = $(el).find("pubDate").first().text().trim();
-    if (title && link) {
-      items.push({ title, link: canonical(link), pubDate });
-      rssCount++;
-    }
+    if (title && link) { items.push({ title, link: canonical(link), pubDate }); rssCount++; }
   });
 
-  // Atom
   $("entry").each((_, el) => {
     const title = $(el).find("title").first().text().trim();
-    // Prefer alternate link
     let link =
       $(el).find("link[rel='alternate'][href]").first().attr("href")?.trim() ||
-      $(el).find("link[href]").first().attr("href")?.trim() ||
-      "";
+      $(el).find("link[href]").first().attr("href")?.trim() || "";
     const pubDate = $(el).find("updated, published").first().text().trim();
-    if (title && link) {
-      items.push({ title, link: canonical(link), pubDate });
-      atomCount++;
-    }
+    if (title && link) { items.push({ title, link: canonical(link), pubDate }); atomCount++; }
   });
 
-  // If nothing parsed but HTML page, try OG tags (some blogs expose feed-like pages)
   if (!items.length) {
     const title =
       $("meta[property='og:title']").attr("content") ||
-      $("meta[name='twitter:title']").attr("content") ||
-      $("title").text();
-    const link =
-      $("meta[property='og:url']").attr("content") ||
-      $("link[rel='canonical']").attr("href") ||
-      url;
+      $("meta[name='twitter:title']").attr("content") || $("title").text();
+    const link = $("meta[property='og:url']").attr("content") ||
+                 $("link[rel='canonical']").attr("href") || url;
     if (title && link) items.push({ title, link: canonical(link) });
   }
 
-  console.log(`Parsed feed: ${url}  (RSS items: ${rssCount}, Atom items: ${atomCount}, Total kept: ${items.length})`);
+  console.log(`Parsed feed: ${url}  (RSS: ${rssCount}, Atom: ${atomCount}, Total: ${items.length})`);
   return items;
 }
 
-function keywordMatch(s: string) {
-  const lo = s.toLowerCase();
-  return KEYWORDS.some((k) => lo.includes(k));
-}
+function keywordMatch(s: string) { return KEYWORDS.some(k => s.toLowerCase().includes(k)); }
 
 async function fetchArticleSummary(url: string, title: string) {
-  // Pull the article HTML and summarise heuristically, or use OpenAI if key is provided
   let summary = "";
+  let ogImage: string | null = null;
+
   try {
     const html = await get(url);
     const $ = cheerio.load(html);
-    // Grab first ~8 paragraphs, flatten whitespace, cap length
     const text = $("p").slice(0, 8).text().replace(/\s+/g, " ").trim().slice(0, 1200);
     summary = text || "Summary not available.";
+    ogImage = extractOgImage($, url);
   } catch {
     summary = "Summary not available.";
   }
 
-  // Optional: use OpenAI for better summary if OPENAI_API_KEY provided
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
   if (OPENAI_API_KEY && summary !== "Summary not available.") {
     try {
       const prompt =
         `Summarise in 2 concise sentences, neutral and factual, focused on Ineos Grenadier / 4x4 relevance only. ` +
-        `Avoid speculation or marketing language. Do not invent details.\n\n` +
-        `Title: ${title}\n\nText:\n${summary}`;
+        `Avoid speculation or marketing language. Do not invent details.\n\nTitle: ${title}\n\nText:\n${summary}`;
 
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${OPENAI_API_KEY}`,
-        },
+        headers: { "content-type": "application/json", authorization: `Bearer ${OPENAI_API_KEY}` },
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: prompt }],
@@ -188,64 +147,40 @@ async function fetchArticleSummary(url: string, title: string) {
         const content = j.choices?.[0]?.message?.content?.trim();
         if (content) summary = content;
       }
-    } catch {
-      // keep heuristic summary
-    }
+    } catch { /* keep heuristic */ }
   }
 
-  return summary;
+  return { summary, ogImage };
 }
 
-function ensureDir(p: string) {
-  fs.mkdirSync(p, { recursive: true });
-}
-
+function ensureDir(p: string) { fs.mkdirSync(p, { recursive: true }); }
 function loadJSON<T>(file: string, fallback: T): T {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8")) as T;
-  } catch {
-    return fallback;
-  }
+  try { return JSON.parse(fs.readFileSync(file, "utf8")) as T; } catch { return fallback; }
 }
-
-/** ISO week number (1–53) for a date (UTC-based) */
 function isoWeek(d = new Date()) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7; // Mon=1..Sun=7
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum); // move to Thursday of this week
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return weekNo;
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-function sleep(ms: number) {
-  return new Promise((res) => setTimeout(res, ms));
-}
-
+// ---------- Main ----------
 async function main() {
-  ensureDir(DATA_DIR);
-  ensureDir(POSTS_DIR);
+  ensureDir(DATA_DIR); ensureDir(POSTS_DIR);
 
   const feeds: string[] = loadJSON(FEEDS_FILE, []);
   const seen: SeenRecord = loadJSON(SEEN_FILE, {});
-
-  if (!feeds.length) {
-    console.warn(`No feeds listed in ${FEEDS_FILE}. Add some RSS/Atom URLs to proceed.`);
-    return;
-  }
+  if (!feeds.length) { console.warn(`No feeds in ${FEEDS_FILE}`); return; }
 
   let candidates: FeedItem[] = [];
   for (const f of feeds) {
-    try {
-      const items = await fetchFeed(f);
-      candidates.push(...items);
-    } catch (e) {
-      console.warn("Feed error:", f, (e as Error).message);
-    }
+    try { candidates.push(...(await fetchFeed(f))); }
+    catch (e) { console.warn("Feed error:", f, (e as Error).message); }
   }
   console.log(`Total candidate items parsed: ${candidates.length}`);
 
-  // Filter for Grenadier/4x4 relevance and dedupe by link hash
   const picked: PickedItem[] = [];
   for (const it of candidates) {
     const t = it.title || "";
@@ -261,43 +196,42 @@ async function main() {
     picked.push({ title: t, link: url, date });
     seen[h] = { title: t, link: url, date };
 
-    if (picked.length >= MAX_PER_RUN) break; // cap per run
+    if (picked.length >= MAX_PER_RUN) break;
   }
-  console.log(`Relevant new items picked this run: ${picked.length}`);
+  console.log(`Relevant new items picked: ${picked.length}`);
 
   if (!picked.length) {
-    console.log("No new relevant items found.");
     fs.writeFileSync(SEEN_FILE, JSON.stringify(seen, null, 2));
+    console.log("No new items.");
     return;
   }
 
-  // Summarise each item (with a small delay)
-  const summaries: Array<PickedItem & { summary: string }> = [];
+  const summaries: Array<PickedItem & { summary: string; ogImage?: string | null }> = [];
   for (const p of picked) {
-    const s = await fetchArticleSummary(p.link, p.title);
-    summaries.push({ ...p, summary: s });
-    if (SUMMARY_DELAY_MS > 0) await sleep(SUMMARY_DELAY_MS);
+    const { summary, ogImage } = await fetchArticleSummary(p.link, p.title);
+    summaries.push({ ...p, summary, ogImage: ogImage || undefined });
+    if (SUMMARY_DELAY_MS) await sleep(SUMMARY_DELAY_MS);
   }
 
-  // Build roundup MD (weekly-friendly)
   const now = new Date();
   const label = monthLabel(now);
   const week = isoWeek(now);
 
-  // Unique weekly slug: e.g., grenadier-news-september-2025-w36
   const slug = slugify(`grenadier-news-${label}-w${week}`);
   const outFile = path.join(POSTS_DIR, `${slug}.md`);
   const title = `Ineos Grenadier News Roundup — ${label} (Week ${week})`;
   const today = ymd();
 
-  const body = summaries
-    .map(
-      (s, i) =>
-        `### ${i + 1}. ${s.title}\n` +
-        `${s.summary}\n\n` +
-        `👉 Source: ${s.link}\n`
-    )
-    .join(`\n---\n\n`);
+  const body = summaries.map((s, i) => {
+      const thumb = s.ogImage
+        ? `<img src="${s.ogImage}" alt="" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:6px 0 10px;border:1px solid #1e2937" />\n`
+        : "";
+      return `### ${i + 1}. ${s.title}
+${thumb}${s.summary}
+
+👉 Source: ${s.link}
+`;
+    }).join(`\n---\n\n`);
 
   const md = `---
 title: "${title}"
@@ -326,7 +260,4 @@ ${body}
   console.log(`Created ${path.relative(process.cwd(), outFile)}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main().catch(e => { console.error(e); process.exit(1); });
