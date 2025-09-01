@@ -1,0 +1,44 @@
+name: Generate Grenadier News Roundup
+
+on:
+  schedule:
+    # Run every Monday at 06:00 UTC (adjust as you like)
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Generate monthly/weekly roundup
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # optional
+        run: |
+          node -e "require('fs').existsSync('scripts/generate-news.ts') || process.exit(1)"
+          npx ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/generate-news.ts
+
+      - name: Commit changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "grenadier-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add content/posts data/seen.json
+            git commit -m "chore(news): add ${GITHUB_RUN_NUMBER} roundup $(date -u +'%Y-%m-%d')"
+            git push
+          else
+            echo "No changes to commit."
+          fi
