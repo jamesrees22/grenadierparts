@@ -2,6 +2,15 @@ import "./globals.css";
 import type { Metadata } from "next";
 import React from "react";
 import Nav from "@/components/Nav";
+import { Roboto } from "next/font/google"; // ⬅️ add
+
+// Self-hosted by Next; no network to Google
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700", "900"], // pick what you use
+  display: "swap",
+  variable: "--font-sans", // exposes a CSS var
+});
 
 export const metadata: Metadata = {
   title: "GrenadierParts.com",
@@ -10,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={roboto.variable}> {/* ⬅️ attach the font variable */}
       <body>
         <header className="site-header">
           <div className="container header-inner">
