@@ -124,3 +124,142 @@ hr{
   color: var(--fg);
   opacity: 0.85;
 }
+/* Layout helpers */
+:root {
+  --container: 1080px;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden; /* kill horizontal scroll */
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* Header */
+.site-header {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  z-index: 20;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.site-logo {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--brand);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Nav */
+.nav {
+  position: relative;
+}
+
+/* Burger button (mobile) */
+.nav__toggle {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 36px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nav__toggle-bar {
+  width: 18px;
+  height: 2px;
+  background: var(--fg);
+  display: block;
+}
+
+/* Menu list */
+.nav__list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: none;
+  min-width: 190px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.nav__list li + li { margin-top: 8px; }
+
+.nav__list.is-open {
+  display: block;
+}
+
+/* Desktop: inline menu, no burger */
+@media (min-width: 860px) {
+  .nav__toggle { display: none; }
+  .nav__list {
+    position: static;
+    display: flex !important;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    min-width: 0;
+    gap: 18px;
+  }
+  .nav__list li + li { margin-top: 0; }
+}
+
+/* Cards and images ensure no overflow on mobile */
+.card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--panel);
+}
+
+img, video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Utility colors (if not already defined) */
+:root {
+  --bg: #0c1116;
+  --panel: #0f1520;
+  --border: #1e2937;
+  --fg: #dbe5f7;
+  --brand: #2aa1ff;
+}
+
+.link { color: var(--fg); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.muted { opacity: 0.8; }
+.badge {
+  border: 1px solid var(--border);
+  background: #0e2336;
+  border-radius: 999px;
+}

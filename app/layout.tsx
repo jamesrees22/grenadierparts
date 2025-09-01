@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import React from "react";
+import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "GrenadierParts.com",
@@ -11,18 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <header style={{ padding: "20px 0" }}>
-          <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <a href="/" style={{ fontSize: 28, fontWeight: 800, color: "var(--brand)" }}>
-              GrenadierParts.com
-            </a>
-            <nav style={{ display: "flex", gap: 18 }}>
-              <a href="/" className="link">Home</a>
-              <a href="/category/accessories" className="link">Accessories</a>
-              <a href="/category/maintenance" className="link">Maintenance</a>
-              <a href="/news" className="link">News</a>
-              <a href="/disclosure" className="link">Disclosure</a>
-            </nav>
+        <header className="site-header">
+          <div className="container header-inner">
+            <a href="/" className="site-logo">GrenadierParts.com</a>
+            <Nav />
           </div>
         </header>
 
