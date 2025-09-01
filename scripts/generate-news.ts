@@ -12,38 +12,40 @@ type OpenAIChatResponse = { choices?: Array<{ message?: { content?: string } }> 
 
 // ---------- Config ----------
 // Title-level positives: vehicle/platform focused
-const TITLE_KEYWORDS = [
+const TITLE_STRONG = [
   "ineos grenadier",
   "ineos quartermaster",
+  "quartermaster ineos",
+  "grenadier ineos",
   "ineos trailmaster",
   "ineos fieldmaster",
-  "ineos automotive",
-  "grenadier 4x4",      // allow singular + strong auto hint
-  "quartermaster 4x4"
+  "ineos automotive"
 ];
 
-// Automotive context hints (broaden acceptance)
+// Automotive context hints (to accept singular "grenadier" headlines too)
 const AUTO_HINTS = [
   "4x4","4wd","awd","off-road","overland","suv","ute","pickup","pick-up",
-  "review","first drive","test drive","road test","spec","specs","price","pricing","release","launch",
+  "review","first drive","test drive","road test","long-term",
+  "spec","specs","price","pricing","msrp","uk pricing","release","launch",
   "engine","diesel","petrol","bmw","b58","power","torque","towing","payload",
-  "diff","locking","low range","transfer case","ladder frame","ground clearance","axle","winch"
+  "diff","locking","low range","transfer case","ladder frame","ground clearance","axle","winch",
+  "ad campaign","advert","marketing","portal axles","letech"
 ];
 
 // Hard negatives (cycling team etc.)
 const NEGATIVE_STRICT = [
-  "ineos grenadiers"     // the cycling team (plural)
+  // exact/word-boundary for plural team
+  /\bineos\s+grenadiers\b/i
 ];
 
-// Soft negatives (any cycling context)
+// Soft negatives (cycling context)
 const NEGATIVE_HINTS = [
   "cycling","peloton","tour de france","tdf","giro","vuelta","stage win","stage",
-  "uci","rider","team roster","cyclingnews","grand tour"
+  "uci","rider","team roster","grand tour"
 ];
 
 const MAX_PER_RUN = 10;
 const SUMMARY_DELAY_MS = 400;
-const RELEVANCE_PARAGRAPHS = 6; // how many <p> to scan for content check
 
 const POSTS_DIR = path.join(process.cwd(), "content", "posts");
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -62,18 +64,17 @@ function hash(input: string) { return crypto.createHash("sha1").update(input).di
 function canonical(url: string) {
   try { const u = new URL(url); u.hash = ""; return u.toString(); } catch { return url; }
 }
-function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
-function hasWord(haystack: string, word: string) {
-  return new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(haystack);
-}
-function includesAny(haystack: string, arr: string[]) {
-  const lo = haystack.toLowerCase();
+function includesAny(hay: string, arr: string[]) {
+  const lo = hay.toLowerCase();
   return arr.some(k => lo.includes(k));
+}
+function hasWord(hay: string, word: string) {
+  return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(hay);
 }
 
 async function get(url: string) {
   const controller = new AbortController(); const t = setTimeout(() => controller.abort(), 15_000);
-  const init: any = {
+  const init: RequestInit = {
     headers: { "user-agent": "grenadierparts.com news-bot (+https://grenadierparts.com)" },
     signal: controller.signal,
   };
@@ -114,55 +115,33 @@ function extractImage($: cheerio.CheerioAPI, base: string): string | null {
 }
 
 // ---------- Relevance logic ----------
-function hasNegative(s: string) {
+function isCyclingContext(s: string) {
   const lo = s.toLowerCase();
-  // exact/word-boundary for "grenadiers" plural
-  if (/\bineos\s+grenadiers\b/i.test(lo)) return true;
-  if (/\bgrenadiers\b/i.test(lo) && lo.includes("ineos")) return true;
-  // soft cycling hints
-  return includesAny(lo, NEGATIVE_HINTS);
+  if (NEGATIVE_STRICT.some(rx => rx.test(lo))) return true;
+  return NEGATIVE_HINTS.some(h => lo.includes(h));
 }
 
 function titleLikelyRelevant(title: string) {
   const lo = title.toLowerCase();
-  if (hasNegative(lo)) return false;
 
-  // Strong matches
-  if (includesAny(lo, TITLE_KEYWORDS)) return true;
+  // Exclude cycling team / context
+  if (isCyclingContext(lo)) return false;
 
-  // Singular "grenadier" with automotive hints (avoid plural)
-  const hasSingularGrenadier = hasWord(lo, "grenadier") && !hasWord(lo, "grenadiers");
-  const hasQuartermaster = hasWord(lo, "quartermaster");
+  // Strong phrases (always accept)
+  if (includesAny(lo, TITLE_STRONG)) return true;
 
-  if ((hasSingularGrenadier || hasQuartermaster) && includesAny(lo, AUTO_HINTS)) return true;
+  // Accept singular "grenadier" (not plural "grenadiers") when automotive-ish
+  const singularGrenadier = hasWord(lo, "grenadier") && !hasWord(lo, "grenadiers");
+  const quartermaster = hasWord(lo, "quartermaster");
 
-  // "Ineos" with automotive hints
+  // Automotive hints catch the ad/marketing & portal axles headlines you marked ***
+  if ((singularGrenadier || quartermaster) && includesAny(lo, AUTO_HINTS)) return true;
+
+  // Fallback: title contains "ineos" + any automotive hint
   if (hasWord(lo, "ineos") && includesAny(lo, AUTO_HINTS)) return true;
 
-  return false;
-}
-
-function contentLikelyRelevant(text: string) {
-  const lo = text.toLowerCase();
-  if (hasNegative(lo)) return false;
-
-  // Direct, unambiguous phrases
+  // Also accept exact phrase "Ineos Grenadier" even without hints (very likely relevant)
   if (/\bineos\s+grenadier\b/i.test(lo)) return true;
-  if (/\bineos\s+quartermaster\b/i.test(lo)) return true;
-  if (/\bineos\s+automotive\b/i.test(lo)) return true;
-
-  const hasSingularGrenadier = hasWord(lo, "grenadier") && !hasWord(lo, "grenadiers");
-  const hasQuartermaster = hasWord(lo, "quartermaster");
-  const ineosPresent = hasWord(lo, "ineos");
-
-  // Automotive context present?
-  const autoContext = includesAny(lo, AUTO_HINTS);
-
-  // Accept if
-  //  - "grenadier" (singular) OR "quartermaster" with automotive context
-  //  - OR "ineos" + automotive context
-  if ((hasSingularGrenadier || hasQuartermaster) && autoContext) return true;
-  if (ineosPresent && autoContext) return true;
 
   return false;
 }
@@ -264,16 +243,6 @@ function isoWeek(d = new Date()) {
 }
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-async function fetchContentSample(url: string): Promise<string> {
-  try {
-    const html = await get(url);
-    const $ = cheerio.load(html);
-    return $("p").slice(0, RELEVANCE_PARAGRAPHS).text().replace(/\s+/g, " ").trim().slice(0, 1500);
-  } catch {
-    return "";
-  }
-}
-
 // ---------- Main ----------
 async function main() {
   ensureDir(DATA_DIR); ensureDir(POSTS_DIR);
@@ -292,32 +261,13 @@ async function main() {
   const picked: PickedItem[] = [];
   for (const it of candidates) {
     const title = it.title || "";
-
-    // quick skip for negatives
-    if (hasNegative(title)) {
-      // console.log(`Skip (negative in title): ${title}`);
-      continue;
-    }
-
-    const likely = titleLikelyRelevant(title);
-    const maybe = likely || /(?:\bineos\b|\bgrenadier\b|\bquartermaster\b)/i.test(title);
+    if (!titleLikelyRelevant(title)) continue;
 
     const url = it.link ? canonical(it.link) : "";
     if (!url) continue;
 
     const h = hash(url);
     if (seen[h]) continue;
-
-    // SECONDARY FILTER: if likely or maybe, confirm by article content
-    if (maybe) {
-      const sample = await fetchContentSample(url);
-      if (!contentLikelyRelevant(sample)) {
-        console.log(`Rejected likely false-positive: ${title}`);
-        continue;
-      }
-    } else {
-      continue; // not even maybe
-    }
 
     const date = it.pubDate ? new Date(it.pubDate).toISOString().slice(0, 10) : ymd();
     picked.push({ title, link: url, date });

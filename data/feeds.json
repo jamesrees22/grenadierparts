@@ -2,19 +2,15 @@
   "https://www.autocar.co.uk/rss",
   "https://www.autoexpress.co.uk/feeds/all",
   "https://www.carexpert.com.au/feed",
-  "https://www.topgear.com/feeds/all",
   "https://www.whichcar.com.au/rss",
-  "https://www.overlandjunction.com/blogs/news.atom",
-  "https://www.ineosgrenadier.com/en/gb/news-feed",
-  "https://ineosgrenadier.com/en/gb/news",
-  "https://news.google.com/rss/search?q=Ineos+Grenadier",
+
   "https://www.carscoops.com/tag/ineos-grenadier/feed",
   "https://www.motor1.com/rss/category/off-road/",
   "https://www.motor1.com/rss/category/recalls/",
-  "https://www.motor1.com/rss/news/",
-  "https://www.autoblog.com/rss.xml",
+
   "https://expeditionportal.com/feed/",
   "https://feed.podbean.com/GrenadierWorks/feed.xml",
   "https://feeds.transistor.fm/overland-journal-podcast",
-  "https://www.youtube.com/feeds/videos.xml?channel_id=UCkUPNBqPbOYuanFuh1RDfLw"
+
+  "https://news.google.com/rss/search?q=Ineos+Grenadier"
 ]
