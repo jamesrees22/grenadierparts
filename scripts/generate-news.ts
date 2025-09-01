@@ -1,8 +1,7 @@
 /* eslint-disable no-console */
-import fs from "node:fs";
-import path from "node:path";
-import crypto from "node:crypto";
-import fetch, { RequestInit } from "node-fetch";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as crypto from "node:crypto";
 import * as cheerio from "cheerio";
 
 // ---------- Types ----------
