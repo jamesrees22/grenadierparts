@@ -34,8 +34,7 @@ const AUTO_HINTS = [
 
 // Hard negatives (cycling team etc.)
 const NEGATIVE_STRICT = [
-  // exact/word-boundary for plural team
-  /\bineos\s+grenadiers\b/i
+  /\bineos\s+grenadiers\b/i // cycling team (plural)
 ];
 
 // Soft negatives (cycling context)
@@ -114,6 +113,47 @@ function extractImage($: cheerio.CheerioAPI, base: string): string | null {
   }
 }
 
+// ---------- Location inference ----------
+type Region = "UK" | "US" | "AU" | "EU" | "CA" | "NZ" | "ZA" | "Global";
+
+function inferRegionFromTLD(host: string): Region | null {
+  const lo = host.toLowerCase();
+  if (lo.endsWith(".co.uk") || lo.endsWith(".uk")) return "UK";
+  if (lo.endsWith(".com.au") || lo.endsWith(".au")) return "AU";
+  if (lo.endsWith(".ca")) return "CA";
+  if (lo.endsWith(".co.nz") || lo.endsWith(".nz")) return "NZ";
+  if (lo.endsWith(".co.za") || lo.endsWith(".za")) return "ZA";
+  // heuristic: many .com sites skew US/global; decide via title hints later
+  return null;
+}
+
+function inferRegionFromTitle(title: string): Region | null {
+  const lo = title.toLowerCase();
+  // Country keywords
+  if (/\buk\b|\bbritain\b|\bbritish\b|\bengland\b|\bscotland\b|\bwales\b|\bni\b/.test(lo)) return "UK";
+  if (/\bus\b|\busa\b|\bamerica\b|\bumsrp\b|\bus-market\b/.test(lo)) return "US";
+  if (/\baustralia\b|\bau\b|\baussie\b/.test(lo)) return "AU";
+  if (/\bcanada\b|\bcdn\b|\bcanadian\b/.test(lo)) return "CA";
+  if (/\bnew zealand\b|\bnz\b/.test(lo)) return "NZ";
+  if (/\bsouth africa\b|\bza\b/.test(lo)) return "ZA";
+  if (/\beurope\b|\beu\b|\beuropean\b|\beu-market\b/.test(lo)) return "EU";
+  // Currency hints
+  if (/[£]\s?\d/.test(lo)) return "UK";
+  if (/\$\s?\d/.test(lo) && /msrp|price|pricing|usd|us/.test(lo)) return "US";
+  if (/\b€\s?\d/.test(lo)) return "EU";
+  return null;
+}
+
+function inferLocation(url: string, title: string): Region {
+  let region: Region | null = null;
+  try {
+    const u = new URL(url);
+    region = inferRegionFromTLD(u.hostname);
+    if (!region) region = inferRegionFromTitle(title);
+  } catch { /* ignore */ }
+  return region || "Global";
+}
+
 // ---------- Relevance logic ----------
 function isCyclingContext(s: string) {
   const lo = s.toLowerCase();
@@ -134,13 +174,12 @@ function titleLikelyRelevant(title: string) {
   const singularGrenadier = hasWord(lo, "grenadier") && !hasWord(lo, "grenadiers");
   const quartermaster = hasWord(lo, "quartermaster");
 
-  // Automotive hints catch the ad/marketing & portal axles headlines you marked ***
   if ((singularGrenadier || quartermaster) && includesAny(lo, AUTO_HINTS)) return true;
 
   // Fallback: title contains "ineos" + any automotive hint
   if (hasWord(lo, "ineos") && includesAny(lo, AUTO_HINTS)) return true;
 
-  // Also accept exact phrase "Ineos Grenadier" even without hints (very likely relevant)
+  // Also accept exact phrase "Ineos Grenadier" even without hints
   if (/\bineos\s+grenadier\b/i.test(lo)) return true;
 
   return false;
@@ -284,10 +323,15 @@ async function main() {
     return;
   }
 
-  const summaries: Array<PickedItem & { summary: string; image?: string | null }> = [];
+  // Summarise and infer location
+  const summaries: Array<PickedItem & { summary: string; image?: string | null; location: Region }> = [];
+  const locationsSet = new Set<Region>();
+
   for (const p of picked) {
     const { summary, image } = await fetchArticleSummary(p.link, p.title);
-    summaries.push({ ...p, summary, image: image || undefined });
+    const loc = inferLocation(p.link, p.title);
+    locationsSet.add(loc);
+    summaries.push({ ...p, summary, image: image || undefined, location: loc });
     if (SUMMARY_DELAY_MS) await sleep(SUMMARY_DELAY_MS);
   }
 
@@ -304,12 +348,18 @@ async function main() {
       const thumb = s.image
         ? `<img src="${s.image}" alt="" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:6px 0 10px;border:1px solid #1e2937" />\n`
         : "";
-      return `### ${i + 1}. ${s.title}
+      const locBadge = `<span class="badge" style="display:inline-block;padding:2px 8px;border:1px solid #1e2937;border-radius:999px;font-size:12px;margin-left:6px">${s.location}</span>`;
+      return `### ${i + 1}. ${s.title} ${locBadge}
 ${thumb}${s.summary}
 
 👉 Source: ${s.link}
 `;
     }).join(`\n---\n\n`);
+
+  // turn Set into sorted array for front matter
+  const locationsArr = Array.from(locationsSet).sort();
+  // also add locations to tags for easy filtering (keep 'news')
+  const tags = ["news", ...locationsArr];
 
   const md = `---
 title: "${title}"
@@ -318,11 +368,13 @@ excerpt: "Latest headlines and community updates about the Ineos Grenadier — $
 image: "/grenadier.jpg"
 image_credit: "Image © James Rees or licensed stock"
 tags:
-  - news
+${tags.map(t => `  - ${t}`).join("\n")}
+locations:
+${locationsArr.map(l => `  - ${l}`).join("\n")}
 category: news
 ---
 
-Welcome to the ${label} (Week ${week}) Grenadier News Roundup. Here are the key headlines and updates from around the web.
+Welcome to the ${label} (Week ${week}) Grenadier News Roundup. Filter by region on the News page to see UK/US/AU items.
 
 ---
 
