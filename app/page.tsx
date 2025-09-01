@@ -9,10 +9,45 @@ export default async function HomePage() {
 
   return (
     <section>
-      {/* Hero kept as you currently have it */}
+      {/* HERO */}
+      <section
+        aria-label="Ineos Grenadier hero"
+        style={{
+          marginBottom: 32,
+          borderRadius: 12,
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            minHeight: 280,
+            maxHeight: 460,
+            backgroundImage: "url(/grenadier.jpg)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+        <div style={{ padding: 16 }}>
+          <h2 style={{ margin: 0 }}>Guides, gear & parts for the Ineos Grenadier</h2>
+          <p className="muted" style={{ marginTop: 6 }}>
+            Practical upgrades, maintenance advice, and curated accessories. Updated regularly.
+          </p>
+        </div>
+      </section>
 
+      {/* POSTS */}
       <h2 style={{ marginBottom: 16 }}>Latest posts</h2>
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 16 }}>
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: 0,
+          display: "grid",
+          gap: 16,
+        }}
+      >
         {posts.map((p) => (
           <li key={p.slug} className="card">
             <a
