@@ -9,13 +9,33 @@ export default async function HomePage() {
   return (
     <section>
       {/* Hero */}
-      <section style={{ marginBottom: 32, textAlign: "center" }}>
-        <img
-          src="/hero-grenadier.jpg"
-          alt="Ineos Grenadier off-road"
-          style={{ width: "100%", borderRadius: 12, marginBottom: 16, border: "1px solid var(--border)" }}
-        />
-        <h2 style={{ margin: 0 }}>Guides, gear & parts for the Ineos Grenadier</h2>
+      <section style={{ marginBottom: 32 }}>
+        <div
+          style={{
+            width: "100%",
+            borderRadius: 12,
+            overflow: "hidden",
+            border: "1px solid var(--border)",
+          }}
+        >
+          {/* Responsive hero image using your upload at /public/grenadier.jpg */}
+          <img
+            src="/grenadier.jpg"
+            alt="Ineos Grenadier off-road in the mountains"
+            style={{
+              display: "block",
+              width: "100%",
+              height: "auto",
+              maxHeight: 460,           // soft cap the height on large screens
+              objectFit: "cover",       // crop gracefully if the aspect is tall
+            }}
+            loading="eager"
+          />
+        </div>
+
+        <h2 style={{ margin: "14px 0 0" }}>
+          Guides, gear & parts for the Ineos Grenadier
+        </h2>
         <p className="muted" style={{ marginTop: 6 }}>
           Practical upgrades, maintenance advice, and curated accessories. Updated regularly.
         </p>
