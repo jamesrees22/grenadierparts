@@ -6,13 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-
-    // News generator (preferred)
-    "news:run": "tsx scripts/generate-news.ts",
-
-    // Optional alternatives if you ever want them:
-    "news:run:esm": "node --loader ts-node/esm scripts/generate-news.ts",
-    "news:run:cjs": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/generate-news.ts"
+    "news:run": "tsx scripts/generate-news.ts"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
