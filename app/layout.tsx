@@ -5,7 +5,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: "GrenadierParts.com",
-  description: "Accessories, parts & resources for the Ineos Grenadier."
+  description: "Accessories, parts & resources for the Ineos Grenadier.",
+  icons: { icon: "/favicon.ico" }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -15,11 +16,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.className}>
       <body>
         <header className="site-header">
-          <div className="container">
+          <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <a href="/" className="brand" aria-label="GrenadierParts.com Home">
               <h1 className="brand-title" style={{ margin: 0 }}>GrenadierParts.com</h1>
             </a>
-            <p className="brand-sub">Guides, gear, and parts for the Ineos Grenadier.</p>
+            <nav style={{ display: "flex", gap: 16 }}>
+              <a href="/">Home</a>
+              <a href="/posts/accessories">Accessories</a>
+              <a href="/posts/maintenance">Maintenance</a>
+              <a href="/posts/news">News</a>
+              <a href="/disclosure">Disclosure</a>
+            </nav>
           </div>
         </header>
 
@@ -54,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
 
-        {/* Google AdSense (global) — replace with your real pub id if not already set */}
+        {/* Google AdSense (global) */}
         <script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8299388815722920"
