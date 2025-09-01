@@ -1,4 +1,5 @@
 import AdSenseBlock from "@/components/AdSenseBlock";
+import AffiliateBadge from "@/components/AffiliateBadge";
 import { getPostBySlug } from "@/lib/posts";
 
 export const revalidate = 3600; // 1 hour
@@ -15,12 +16,22 @@ export default async function PostPage({ params }: { params: { slug: string } })
       <h1>{post.title}</h1>
       <p style={{ opacity: 0.75, marginTop: -8 }}>{post.date}</p>
 
-      {/* Top ad (replace slot ID after AdSense approval) */}
+      {/* Badge below date */}
+      <div style={{ margin: "6px 0 14px" }}>
+        <AffiliateBadge />
+      </div>
+
+      {/* Top ad */}
       <AdSenseBlock
         data-ad-slot="1234567890"
         data-ad-format="auto"
         data-full-width-responsive="true"
       />
+
+      {/* Inject badge again just before the markdown content */}
+      <div style={{ margin: "14px 0" }}>
+        <AffiliateBadge />
+      </div>
 
       <div dangerouslySetInnerHTML={{ __html: post.html }} />
 
@@ -37,7 +48,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
       {/* Disclaimer */}
       <p style={{ fontSize: 14, opacity: 0.8 }}>
-        This post may contain affiliate links that help support the site at no extra cost to you.  
+        This post may contain affiliate links that help support the site at no extra cost to you.{" "}
         Please read our{" "}
         <a href="/disclosure" style={{ textDecoration: "underline" }}>Affiliate Disclosure</a> and{" "}
         <a href="/privacy" style={{ textDecoration: "underline" }}>Privacy Policy</a>.
