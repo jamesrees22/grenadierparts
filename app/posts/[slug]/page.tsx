@@ -1,8 +1,5 @@
-import React from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+// app/posts/[slug]/page.tsx
 import AdSenseBlock from "@/components/AdSenseBlock";
-import AffiliateBadge from "@/components/AffiliateBadge";
 import { getPostBySlug } from "@/lib/posts";
 
 export const revalidate = 3600; // 1 hour
@@ -14,38 +11,29 @@ export default async function PostPage({ params }: { params: { slug: string } })
     return <div>Not found</div>;
   }
 
-  // Split markdown into first paragraph + the rest (split on first blank line)
-  const parts = post.content_md.split(/\n\s*\n/);
-  const firstBlock = parts[0] ?? "";
-  const restBlocks = parts.slice(1).join("\n\n");
-
   return (
     <article style={{ maxWidth: 820 }}>
       <h1>{post.title}</h1>
-      <p style={{ opacity: 0.75, marginTop: -8 }}>{post.date}</p>
 
-      {/* Small badge just under date for consistency */}
-      <div style={{ margin: "6px 0 14px" }}>
-        <AffiliateBadge />
+      {/* Date + single affiliate badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+        <p className="muted" style={{ margin: 0 }}>{post.date}</p>
+        <span className="badge" style={{ padding: "2px 8px", fontSize: 12 }}>Contains affiliate links</span>
+        {post.category === "news" && (
+          <span className="badge" style={{ padding: "2px 8px", fontSize: 12, background: "#0e2336" }}>News</span>
+        )}
       </div>
 
-      {/* Top ad (replace slot ID after AdSense approval) */}
-      <AdSenseBlock
-        data-ad-slot="1234567890"
-        data-ad-format="auto"
-        data-full-width-responsive="true"
-      />
-
-      {/* Render first paragraph */}
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{firstBlock}</ReactMarkdown>
-
-      {/* Inject badge INSIDE the content flow, right after first paragraph */}
-      <div style={{ margin: "12px 0 16px" }}>
-        <AffiliateBadge />
+      {/* Top ad (swap slot IDs after AdSense approval) */}
+      <div style={{ marginTop: 14 }}>
+        <AdSenseBlock
+          data-ad-slot="1234567890"
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        />
       </div>
 
-      {/* Render the remainder of the content */}
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{restBlocks}</ReactMarkdown>
+      <div style={{ marginTop: 16 }} dangerouslySetInnerHTML={{ __html: post.html }} />
 
       {/* Bottom ad */}
       <div style={{ marginTop: 24 }}>
@@ -58,9 +46,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
       <hr style={{ margin: "32px 0" }} />
 
-      {/* Disclaimer */}
-      <p style={{ fontSize: 14, opacity: 0.8 }}>
-        This post may contain affiliate links that help support the site at no extra cost to you.{" "}
+      {/* Single footer disclosure */}
+      <p className="muted" style={{ fontSize: 14 }}>
+        This post may contain affiliate links that help support the site at no extra cost to you.
         Please read our{" "}
         <a href="/disclosure" style={{ textDecoration: "underline" }}>Affiliate Disclosure</a> and{" "}
         <a href="/privacy" style={{ textDecoration: "underline" }}>Privacy Policy</a>.
