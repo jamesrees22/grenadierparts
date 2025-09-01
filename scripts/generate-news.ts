@@ -50,22 +50,35 @@ async function get(url: string) {
   } finally { clearTimeout(t); }
 }
 
-// OG image extractor (absolute URL)
-function extractOgImage($: cheerio.CheerioAPI, base: string): string | null {
+/**
+ * Image extractor with favicon fallback.
+ * 1) Try og:image / twitter:image
+ * 2) Else return site favicon (/favicon.ico)
+ * Returns absolute URL or null.
+ */
+function extractImage($: cheerio.CheerioAPI, base: string): string | null {
+  // Try OG/Twitter first
   const raw =
     $("meta[property='og:image']").attr("content") ||
     $("meta[name='twitter:image']").attr("content") ||
     $("meta[name='twitter:image:src']").attr("content") ||
     null;
 
-  if (!raw) return null;
+  if (raw) {
+    try {
+      const abs = new URL(raw, base).toString();
+      if (abs.toLowerCase().endsWith(".gif")) return null; // skip likely tiny trackers
+      return abs;
+    } catch { /* ignore */ }
+  }
+
+  // Fallback → favicon
   try {
-    // resolve relative to the page URL
-    const abs = new URL(raw, base).toString();
-    // rudimentary guard against tiny tracking pixels
-    if (abs.endsWith(".gif")) return null;
-    return abs;
-  } catch { return null; }
+    const u = new URL(base);
+    return `${u.origin}/favicon.ico`;
+  } catch {
+    return null;
+  }
 }
 
 // Tolerant feed fetcher
@@ -114,16 +127,18 @@ function keywordMatch(s: string) { return KEYWORDS.some(k => s.toLowerCase().inc
 
 async function fetchArticleSummary(url: string, title: string) {
   let summary = "";
-  let ogImage: string | null = null;
+  let image: string | null = null;
 
   try {
     const html = await get(url);
     const $ = cheerio.load(html);
     const text = $("p").slice(0, 8).text().replace(/\s+/g, " ").trim().slice(0, 1200);
     summary = text || "Summary not available.";
-    ogImage = extractOgImage($, url);
+    image = extractImage($, url);
   } catch {
+    // If page fetch fails entirely, still return a favicon so there's a visual
     summary = "Summary not available.";
+    image = extractImage(cheerio.load(""), url);
   }
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -150,7 +165,7 @@ async function fetchArticleSummary(url: string, title: string) {
     } catch { /* keep heuristic */ }
   }
 
-  return { summary, ogImage };
+  return { summary, image };
 }
 
 function ensureDir(p: string) { fs.mkdirSync(p, { recursive: true }); }
@@ -206,10 +221,10 @@ async function main() {
     return;
   }
 
-  const summaries: Array<PickedItem & { summary: string; ogImage?: string | null }> = [];
+  const summaries: Array<PickedItem & { summary: string; image?: string | null }> = [];
   for (const p of picked) {
-    const { summary, ogImage } = await fetchArticleSummary(p.link, p.title);
-    summaries.push({ ...p, summary, ogImage: ogImage || undefined });
+    const { summary, image } = await fetchArticleSummary(p.link, p.title);
+    summaries.push({ ...p, summary, image: image || undefined });
     if (SUMMARY_DELAY_MS) await sleep(SUMMARY_DELAY_MS);
   }
 
@@ -223,8 +238,8 @@ async function main() {
   const today = ymd();
 
   const body = summaries.map((s, i) => {
-      const thumb = s.ogImage
-        ? `<img src="${s.ogImage}" alt="" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:6px 0 10px;border:1px solid #1e2937" />\n`
+      const thumb = s.image
+        ? `<img src="${s.image}" alt="" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:6px 0 10px;border:1px solid #1e2937" />\n`
         : "";
       return `### ${i + 1}. ${s.title}
 ${thumb}${s.summary}
