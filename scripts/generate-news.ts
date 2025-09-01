@@ -76,6 +76,7 @@ async function fetchFeed(url: string) {
   // Atom
   $("entry").each((_, el) => {
     const title = $(el).find("title").first().text().trim();
+    the:
     const link = $(el).find("link[href]").first().attr("href")?.trim() || "";
     const pubDate = $(el).find("updated, published").first().text().trim();
     if (title && link) items.push({ title, link, pubDate });
@@ -153,6 +154,16 @@ function loadJSON<T>(file: string, fallback: T): T {
   }
 }
 
+/** ISO week number (1–53) for a date (UTC-based) */
+function isoWeek(d = new Date()) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7; // Mon=1..Sun=7
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum); // move to Thursday of this week
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return weekNo;
+}
+
 async function main() {
   ensureDir(DATA_DIR);
   ensureDir(POSTS_DIR);
@@ -198,11 +209,15 @@ async function main() {
     summaries.push({ ...p, summary: s });
   }
 
-  // Build monthly roundup MD
-  const label = monthLabel(new Date());
-  const slug = slugify(`grenadier-news-${label}`);
+  // Build roundup MD (weekly-friendly)
+  const now = new Date();
+  const label = monthLabel(now);
+  const week = isoWeek(now);
+
+  // Unique weekly slug: e.g., grenadier-news-september-2025-w36
+  const slug = slugify(`grenadier-news-${label}-w${week}`);
   const outFile = path.join(POSTS_DIR, `${slug}.md`);
-  const title = `Ineos Grenadier News Roundup — ${label}`;
+  const title = `Ineos Grenadier News Roundup — ${label} (Week ${week})`;
   const today = ymd();
 
   const body = summaries
@@ -217,7 +232,7 @@ async function main() {
   const md = `---
 title: "${title}"
 date: "${today}"
-excerpt: "Latest headlines and community updates about the Ineos Grenadier — ${label}."
+excerpt: "Latest headlines and community updates about the Ineos Grenadier — ${label}, Week ${week}."
 image: "/grenadier.jpg"
 image_credit: "Image © James Rees or licensed stock"
 tags:
@@ -225,7 +240,7 @@ tags:
 category: news
 ---
 
-Welcome to the ${label} Grenadier News Roundup. Here are the key headlines and updates from around the web.
+Welcome to the ${label} (Week ${week}) Grenadier News Roundup. Here are the key headlines and updates from around the web.
 
 ---
 
