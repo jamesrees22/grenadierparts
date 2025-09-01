@@ -11,13 +11,39 @@ type SeenRecord = Record<string, PickedItem>;
 type OpenAIChatResponse = { choices?: Array<{ message?: { content?: string } }> };
 
 // ---------- Config ----------
-const KEYWORDS = [
-  "ineos grenadier", "grenadier", "quartermaster", "fieldmaster",
-  "trailmaster", "4x4", "off-road", "overland", "overlanding",
+// Title-level positives: vehicle/platform focused
+const TITLE_KEYWORDS = [
+  "ineos grenadier",
+  "ineos quartermaster",
+  "ineos trailmaster",
+  "ineos fieldmaster",
+  "ineos automotive",
+  "grenadier 4x4",      // allow singular + strong auto hint
+  "quartermaster 4x4"
+];
+
+// Automotive context hints (broaden acceptance)
+const AUTO_HINTS = [
+  "4x4","4wd","awd","off-road","overland","suv","ute","pickup","pick-up",
+  "review","first drive","test drive","road test","spec","specs","price","pricing","release","launch",
+  "engine","diesel","petrol","bmw","b58","power","torque","towing","payload",
+  "diff","locking","low range","transfer case","ladder frame","ground clearance","axle","winch"
+];
+
+// Hard negatives (cycling team etc.)
+const NEGATIVE_STRICT = [
+  "ineos grenadiers"     // the cycling team (plural)
+];
+
+// Soft negatives (any cycling context)
+const NEGATIVE_HINTS = [
+  "cycling","peloton","tour de france","tdf","giro","vuelta","stage win","stage",
+  "uci","rider","team roster","cyclingnews","grand tour"
 ];
 
 const MAX_PER_RUN = 10;
 const SUMMARY_DELAY_MS = 400;
+const RELEVANCE_PARAGRAPHS = 6; // how many <p> to scan for content check
 
 const POSTS_DIR = path.join(process.cwd(), "content", "posts");
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -36,9 +62,18 @@ function hash(input: string) { return crypto.createHash("sha1").update(input).di
 function canonical(url: string) {
   try { const u = new URL(url); u.hash = ""; return u.toString(); } catch { return url; }
 }
+function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function hasWord(haystack: string, word: string) {
+  return new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(haystack);
+}
+function includesAny(haystack: string, arr: string[]) {
+  const lo = haystack.toLowerCase();
+  return arr.some(k => lo.includes(k));
+}
+
 async function get(url: string) {
   const controller = new AbortController(); const t = setTimeout(() => controller.abort(), 15_000);
-  const init: RequestInit = {
+  const init: any = {
     headers: { "user-agent": "grenadierparts.com news-bot (+https://grenadierparts.com)" },
     signal: controller.signal,
   };
@@ -56,7 +91,6 @@ async function get(url: string) {
  * Returns absolute URL or null.
  */
 function extractImage($: cheerio.CheerioAPI, base: string): string | null {
-  // Try OG/Twitter first
   const raw =
     $("meta[property='og:image']").attr("content") ||
     $("meta[name='twitter:image']").attr("content") ||
@@ -71,13 +105,66 @@ function extractImage($: cheerio.CheerioAPI, base: string): string | null {
     } catch { /* ignore */ }
   }
 
-  // Fallback → favicon
   try {
     const u = new URL(base);
     return `${u.origin}/favicon.ico`;
   } catch {
     return null;
   }
+}
+
+// ---------- Relevance logic ----------
+function hasNegative(s: string) {
+  const lo = s.toLowerCase();
+  // exact/word-boundary for "grenadiers" plural
+  if (/\bineos\s+grenadiers\b/i.test(lo)) return true;
+  if (/\bgrenadiers\b/i.test(lo) && lo.includes("ineos")) return true;
+  // soft cycling hints
+  return includesAny(lo, NEGATIVE_HINTS);
+}
+
+function titleLikelyRelevant(title: string) {
+  const lo = title.toLowerCase();
+  if (hasNegative(lo)) return false;
+
+  // Strong matches
+  if (includesAny(lo, TITLE_KEYWORDS)) return true;
+
+  // Singular "grenadier" with automotive hints (avoid plural)
+  const hasSingularGrenadier = hasWord(lo, "grenadier") && !hasWord(lo, "grenadiers");
+  const hasQuartermaster = hasWord(lo, "quartermaster");
+
+  if ((hasSingularGrenadier || hasQuartermaster) && includesAny(lo, AUTO_HINTS)) return true;
+
+  // "Ineos" with automotive hints
+  if (hasWord(lo, "ineos") && includesAny(lo, AUTO_HINTS)) return true;
+
+  return false;
+}
+
+function contentLikelyRelevant(text: string) {
+  const lo = text.toLowerCase();
+  if (hasNegative(lo)) return false;
+
+  // Direct, unambiguous phrases
+  if (/\bineos\s+grenadier\b/i.test(lo)) return true;
+  if (/\bineos\s+quartermaster\b/i.test(lo)) return true;
+  if (/\bineos\s+automotive\b/i.test(lo)) return true;
+
+  const hasSingularGrenadier = hasWord(lo, "grenadier") && !hasWord(lo, "grenadiers");
+  const hasQuartermaster = hasWord(lo, "quartermaster");
+  const ineosPresent = hasWord(lo, "ineos");
+
+  // Automotive context present?
+  const autoContext = includesAny(lo, AUTO_HINTS);
+
+  // Accept if
+  //  - "grenadier" (singular) OR "quartermaster" with automotive context
+  //  - OR "ineos" + automotive context
+  if ((hasSingularGrenadier || hasQuartermaster) && autoContext) return true;
+  if (ineosPresent && autoContext) return true;
+
+  return false;
 }
 
 // Tolerant feed fetcher
@@ -122,8 +209,6 @@ async function fetchFeed(url: string) {
   return items;
 }
 
-function keywordMatch(s: string) { return KEYWORDS.some(k => s.toLowerCase().includes(k)); }
-
 async function fetchArticleSummary(url: string, title: string) {
   let summary = "";
   let image: string | null = null;
@@ -135,7 +220,6 @@ async function fetchArticleSummary(url: string, title: string) {
     summary = text || "Summary not available.";
     image = extractImage($, url);
   } catch {
-    // If page fetch fails entirely, still return a favicon so there's a visual
     summary = "Summary not available.";
     image = extractImage(cheerio.load(""), url);
   }
@@ -180,6 +264,16 @@ function isoWeek(d = new Date()) {
 }
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+async function fetchContentSample(url: string): Promise<string> {
+  try {
+    const html = await get(url);
+    const $ = cheerio.load(html);
+    return $("p").slice(0, RELEVANCE_PARAGRAPHS).text().replace(/\s+/g, " ").trim().slice(0, 1500);
+  } catch {
+    return "";
+  }
+}
+
 // ---------- Main ----------
 async function main() {
   ensureDir(DATA_DIR); ensureDir(POSTS_DIR);
@@ -197,8 +291,16 @@ async function main() {
 
   const picked: PickedItem[] = [];
   for (const it of candidates) {
-    const t = it.title || "";
-    if (!keywordMatch(t)) continue;
+    const title = it.title || "";
+
+    // quick skip for negatives
+    if (hasNegative(title)) {
+      // console.log(`Skip (negative in title): ${title}`);
+      continue;
+    }
+
+    const likely = titleLikelyRelevant(title);
+    const maybe = likely || /(?:\bineos\b|\bgrenadier\b|\bquartermaster\b)/i.test(title);
 
     const url = it.link ? canonical(it.link) : "";
     if (!url) continue;
@@ -206,11 +308,23 @@ async function main() {
     const h = hash(url);
     if (seen[h]) continue;
 
+    // SECONDARY FILTER: if likely or maybe, confirm by article content
+    if (maybe) {
+      const sample = await fetchContentSample(url);
+      if (!contentLikelyRelevant(sample)) {
+        console.log(`Rejected likely false-positive: ${title}`);
+        continue;
+      }
+    } else {
+      continue; // not even maybe
+    }
+
     const date = it.pubDate ? new Date(it.pubDate).toISOString().slice(0, 10) : ymd();
-    picked.push({ title: t, link: url, date });
-    seen[h] = { title: t, link: url, date };
+    picked.push({ title, link: url, date });
+    seen[h] = { title, link: url, date };
 
     if (picked.length >= MAX_PER_RUN) break;
+    if (SUMMARY_DELAY_MS) await sleep(120);
   }
   console.log(`Relevant new items picked: ${picked.length}`);
 
