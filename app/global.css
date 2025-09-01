@@ -1,0 +1,126 @@
+/* ---------- Base + theme ---------- */
+:root{
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #6b7280;      /* gray-500-ish */
+  --border: #e5e7eb;     /* gray-200-ish */
+  --card: #ffffff;
+  --link: #0ea5e9;       /* sky-500-ish */
+  --link-hover: #0284c7; /* sky-600-ish */
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg: #0b0f14;
+    --fg: #e5e7eb;
+    --muted: #9ca3af;     /* gray-400-ish */
+    --border: #1f2937;    /* gray-800-ish */
+    --card: #0f141a;
+    --link: #38bdf8;      /* sky-400-ish */
+    --link-hover: #7dd3fc;/* sky-300-ish */
+  }
+}
+
+*{ box-sizing: border-box; }
+html, body{ height: 100%; }
+
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Layout helpers ---------- */
+.container{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ---------- Typography ---------- */
+h1, h2, h3{
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+h1{ font-size: clamp(28px, 4vw, 36px); }
+h2{ font-size: clamp(22px, 3vw, 28px); }
+h3{ font-size: clamp(18px, 2.5vw, 22px); }
+
+p{ line-height: 1.7; margin: 0 0 14px; }
+small, .muted{ color: var(--muted); }
+
+a{
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover{ color: var(--link-hover); text-decoration: underline; }
+
+/* Lists in markdown */
+article ul, article ol{
+  padding-left: 1.25rem;
+  margin: 0 0 14px;
+}
+
+/* Images */
+article img{
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* HR */
+hr{
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- Cards (home list) ---------- */
+.card{
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+/* ---------- Header / footer ---------- */
+.site-header{
+  padding: 16px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.brand{
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.brand-title{
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.brand-sub{
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.site-footer{
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- Badges ---------- */
+.badge{
+  display: inline-block;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg);
+  opacity: 0.85;
+}
