@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import fetch from "node-fetch";
+import fetch, { RequestInit } from "node-fetch";
 import * as cheerio from "cheerio";
 
 // ---------- Types ----------
@@ -26,12 +26,15 @@ const KEYWORDS = [
   "overlanding",
 ];
 
+const MAX_PER_RUN = 10; // hard cap of new items processed per run
+const SUMMARY_DELAY_MS = 400; // courtesy delay between summaries
+
 const POSTS_DIR = path.join(process.cwd(), "content", "posts");
 const DATA_DIR = path.join(process.cwd(), "data");
 const FEEDS_FILE = path.join(DATA_DIR, "feeds.json");
 const SEEN_FILE = path.join(DATA_DIR, "seen.json"); // store hashes/urls we already used
 
-// Month label for the roundup
+// ---------- Helpers ----------
 function monthLabel(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
   return fmt.format(d); // e.g., "September 2025"
@@ -53,41 +56,91 @@ function hash(input: string) {
   return crypto.createHash("sha1").update(input).digest("hex");
 }
 
+function canonical(url: string) {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 async function get(url: string) {
-  const res = await fetch(url, { headers: { "user-agent": "grenadierparts.com news-bot" } });
-  if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
-  return await res.text();
+  // Fetch with timeout + UA
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  const init: RequestInit = {
+    headers: { "user-agent": "grenadierparts.com news-bot (+https://grenadierparts.com)" },
+    signal: controller.signal,
+  };
+
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // extremely tolerant RSS/Atom fetcher (falls back to og tags from HTML if needed)
 async function fetchFeed(url: string) {
   const text = await get(url);
-  const $ = cheerio.load(text, { xmlMode: text.trim().startsWith("<?xml") });
+  // Heuristic: XML mode if starts with XML prolog or <rss / <feed
+  const looksXml = /^\s*<\?xml|^\s*<(rss|feed)\b/i.test(text);
+  const $ = cheerio.load(text, { xmlMode: looksXml });
+
   const items: FeedItem[] = [];
+  let rssCount = 0;
+  let atomCount = 0;
 
   // RSS
   $("item").each((_, el) => {
     const title = $(el).find("title").first().text().trim();
-    const link = $(el).find("link").first().text().trim();
+    let link = $(el).find("link").first().text().trim();
+    // Some feeds nest <link> as child text; if empty, try guid[isPermaLink=true]
+    if (!link) {
+      const guid = $(el).find("guid[ispermalink='true'], guid[isPermaLink='true']").first().text().trim();
+      if (guid) link = guid;
+    }
     const pubDate = $(el).find("pubDate").first().text().trim();
-    if (title && link) items.push({ title, link, pubDate });
+    if (title && link) {
+      items.push({ title, link: canonical(link), pubDate });
+      rssCount++;
+    }
   });
 
   // Atom
   $("entry").each((_, el) => {
     const title = $(el).find("title").first().text().trim();
-    the:
-    const link = $(el).find("link[href]").first().attr("href")?.trim() || "";
+    // Prefer alternate link
+    let link =
+      $(el).find("link[rel='alternate'][href]").first().attr("href")?.trim() ||
+      $(el).find("link[href]").first().attr("href")?.trim() ||
+      "";
     const pubDate = $(el).find("updated, published").first().text().trim();
-    if (title && link) items.push({ title, link, pubDate });
+    if (title && link) {
+      items.push({ title, link: canonical(link), pubDate });
+      atomCount++;
+    }
   });
 
-  // If nothing parsed but HTML page, try OG links (some blogs expose feed-like pages)
+  // If nothing parsed but HTML page, try OG tags (some blogs expose feed-like pages)
   if (!items.length) {
-    const title = $("meta[property='og:title']").attr("content") || $("title").text();
-    const link = $("meta[property='og:url']").attr("content") || url;
-    if (title) items.push({ title, link });
+    const title =
+      $("meta[property='og:title']").attr("content") ||
+      $("meta[name='twitter:title']").attr("content") ||
+      $("title").text();
+    const link =
+      $("meta[property='og:url']").attr("content") ||
+      $("link[rel='canonical']").attr("href") ||
+      url;
+    if (title && link) items.push({ title, link: canonical(link) });
   }
+
+  console.log(`Parsed feed: ${url}  (RSS items: ${rssCount}, Atom items: ${atomCount}, Total kept: ${items.length})`);
   return items;
 }
 
@@ -102,6 +155,7 @@ async function fetchArticleSummary(url: string, title: string) {
   try {
     const html = await get(url);
     const $ = cheerio.load(html);
+    // Grab first ~8 paragraphs, flatten whitespace, cap length
     const text = $("p").slice(0, 8).text().replace(/\s+/g, " ").trim().slice(0, 1200);
     summary = text || "Summary not available.";
   } catch {
@@ -130,7 +184,7 @@ async function fetchArticleSummary(url: string, title: string) {
         }),
       });
       if (r.ok) {
-        const j = (await r.json()) as OpenAIChatResponse; // typed response
+        const j = (await r.json()) as OpenAIChatResponse;
         const content = j.choices?.[0]?.message?.content?.trim();
         if (content) summary = content;
       }
@@ -164,12 +218,21 @@ function isoWeek(d = new Date()) {
   return weekNo;
 }
 
+function sleep(ms: number) {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
 async function main() {
   ensureDir(DATA_DIR);
   ensureDir(POSTS_DIR);
 
   const feeds: string[] = loadJSON(FEEDS_FILE, []);
   const seen: SeenRecord = loadJSON(SEEN_FILE, {});
+
+  if (!feeds.length) {
+    console.warn(`No feeds listed in ${FEEDS_FILE}. Add some RSS/Atom URLs to proceed.`);
+    return;
+  }
 
   let candidates: FeedItem[] = [];
   for (const f of feeds) {
@@ -180,21 +243,27 @@ async function main() {
       console.warn("Feed error:", f, (e as Error).message);
     }
   }
+  console.log(`Total candidate items parsed: ${candidates.length}`);
 
   // Filter for Grenadier/4x4 relevance and dedupe by link hash
   const picked: PickedItem[] = [];
   for (const it of candidates) {
     const t = it.title || "";
     if (!keywordMatch(t)) continue;
-    const url = it.link || "";
+
+    const url = it.link ? canonical(it.link) : "";
     if (!url) continue;
+
     const h = hash(url);
     if (seen[h]) continue;
+
     const date = it.pubDate ? new Date(it.pubDate).toISOString().slice(0, 10) : ymd();
     picked.push({ title: t, link: url, date });
     seen[h] = { title: t, link: url, date };
-    if (picked.length >= 10) break; // cap per run
+
+    if (picked.length >= MAX_PER_RUN) break; // cap per run
   }
+  console.log(`Relevant new items picked this run: ${picked.length}`);
 
   if (!picked.length) {
     console.log("No new relevant items found.");
@@ -202,11 +271,12 @@ async function main() {
     return;
   }
 
-  // Summarise each item
+  // Summarise each item (with a small delay)
   const summaries: Array<PickedItem & { summary: string }> = [];
   for (const p of picked) {
     const s = await fetchArticleSummary(p.link, p.title);
     summaries.push({ ...p, summary: s });
+    if (SUMMARY_DELAY_MS > 0) await sleep(SUMMARY_DELAY_MS);
   }
 
   // Build roundup MD (weekly-friendly)
